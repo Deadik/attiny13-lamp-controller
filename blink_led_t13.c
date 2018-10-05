@@ -5,21 +5,30 @@
 #include <util/delay.h>
 #include <avr/eeprom.h>
 
-#define OUTPUTPWM1 PB0
-#define OUTPUTPWM2 PB1
-#define BUTTONPLUS PB4
+#define OUTPUTPWM1  PB0
+#define OUTPUTPWM2  PB1
+#define BUTTONPLUS  PB4
 #define BUTTONMINUS PB2
 #define BUTTONSWICH PB3
 
+#define RISE_LAMP   1
+#define FAIL_LAMP   2
+
 #define HOLDTIME 2048
 #define HOLDSPEED 64
+
+#define RISE_SPEED 16
 
 /*__eeprom uint8_t PWMVALUE = 255;
 uint8_t setting PWMVALUE;*/
 
 int PWM1 = 0;
+int PWM2 = 0;
 unsigned int holdCounter = 0;
 unsigned int holdSpeedCounter = 0;
+unsigned int riseSpeedCounter = 0;
+
+char stateFlags = 0;
 
 
 
@@ -27,6 +36,9 @@ void init_io(void);
 
 void init_io(void)
 {
+  //Set flags
+  stateFlags |= (1 << RISE_LAMP);  //Идёт розжиг
+  stateFlags &= ~(1 << FAIL_LAMP);  //Идёт затухание
   // Пины кнопок
   DDRB &= ~((1<<BUTTONPLUS)|(1<<BUTTONMINUS)|(1<<BUTTONSWICH)); // входы
   PORTB |= (1<<BUTTONPLUS)|(1<<BUTTONMINUS)|(1<<BUTTONSWICH); // подтянуты
@@ -34,15 +46,20 @@ void init_io(void)
   // Пин светодиода
   DDRB |= (1<<OUTPUTPWM1); // выход
   PORTB &= ~(1<<OUTPUTPWM1); // выключен
+
+  DDRB |= (1<<OUTPUTPWM2); // выход
+  PORTB &= ~(1<<OUTPUTPWM2); // выключен
   //PORTB ^= (1<<OUTPUTPWM1);
 }
 
 void processButtons(void);
+void rise(void);
 
 void processButtons(void){
+  
   if ( (PINB & (1<<BUTTONMINUS)) == 0 ) // если нажата одна из кнопок
   {
-    PWM1+=1;
+    PWM1+=5;
     if(PWM1>255){
       PWM1 = 255;
     }
@@ -50,7 +67,7 @@ void processButtons(void){
 
   if ( (PINB & (1<<BUTTONPLUS)) == 0 ) // если нажата одна из кнопок
   {
-    PWM1-=1;
+    PWM1-=5;
     if(PWM1<0){
       TCNT0 = 0x00;
       PWM1 = 0;
@@ -58,26 +75,49 @@ void processButtons(void){
   }
 
   OCR0A = PWM1;
+  PWM2 = PWM1;
+  OCR0B = PWM2;
+}
+
+void rise(void){
+  if(PWM1>=255){
+    stateFlags &= ~(1 << RISE_LAMP);
+  }
+  riseSpeedCounter++;
+  if(riseSpeedCounter>RISE_SPEED){
+    PWM1++;
+    PWM2++;
+    OCR0A = PWM1;
+    OCR0B = PWM2;
+    riseSpeedCounter=0;
+  }
 }
 
 // Обработчик прерывания PCINT0
 ISR(PCINT0_vect)
 {
-  processButtons();
+  if((stateFlags >> RISE_LAMP) & 1){
+  }else{
+    processButtons();
+  }
 }
 
 ISR(TIM0_OVF_vect) {
-  if ( ((PINB & (1<<BUTTONMINUS)) == 0 ) || ( (PINB & (1<<BUTTONPLUS)) == 0 )){
-    holdSpeedCounter++;
-    if((holdCounter>HOLDTIME) && (holdSpeedCounter>HOLDSPEED)){
-      processButtons();
-      holdSpeedCounter=0;
-    }else{
-      
-      holdCounter++;
-    }
+  if(stateFlags & (1 << RISE_LAMP)){
+    rise();
   }else{
-    holdCounter = 0;
+    if ( ((PINB & (1<<BUTTONMINUS)) == 0 ) || ( (PINB & (1<<BUTTONPLUS)) == 0 )){
+      holdSpeedCounter++;
+      if((holdCounter>HOLDTIME) && (holdSpeedCounter>HOLDSPEED)){
+        processButtons();
+        holdSpeedCounter=0;
+      }else{
+        
+        holdCounter++;
+      }
+    }else{
+      holdCounter = 0;
+    }
   }
 }
 
