@@ -12,11 +12,15 @@
 
 #define RISE_LAMP   1
 #define FAIL_LAMP   2
+#define SETUPMODE   3
+#define LAMP_BLINK  4
 
 #define HOLDTIME 2048 //Set period for waiting hold button
 #define HOLDSPEED 64  //Set period for repeating action on hold button
 
 #define RISE_SPEED 16
+
+#define SETUP_HOLD_TIME 2048
 
 /*__eeprom uint8_t PWMVALUE = 255;
 uint8_t setting PWMVALUE;*/
@@ -28,8 +32,10 @@ int PWM2 = 0;
 unsigned int holdCounter = 0;
 unsigned int holdSpeedCounter = 0;
 unsigned int riseSpeedCounter = 0;
+unsigned int setupHoldCounter = 0;
 
 char stateFlags = 0;
+char selectedLamp = 0; //0 - не выбрана, 1 - основная, 2- дополнительная, 3 - Обе
 
 void init_io(void);
 
@@ -38,6 +44,8 @@ void init_io(void)
   //Set flags
   stateFlags |= (1 << RISE_LAMP);  //Идёт розжиг
   stateFlags &= ~(1 << FAIL_LAMP);  //Идёт затухание
+  stateFlags &= ~(1 << SETUPMODE);  //Режим настройки
+  stateFlags &= ~(1 << LAMP_BLINK);  //Режим индикации настраиваемой лампы
   // Пины кнопок
   DDRB &= ~((1<<BUTTONPLUS)|(1<<BUTTONMINUS)|(1<<BUTTONSWICH)); // входы
   PORTB |= (1<<BUTTONPLUS)|(1<<BUTTONMINUS)|(1<<BUTTONSWICH); // подтянуты
@@ -53,6 +61,11 @@ void init_io(void)
 
 void processButtons(void);
 void rise(void);
+void blink(void);
+
+void blink(void){
+  //TODO: Add blink alghoritm
+}
 
 void processButtons(void){
   
